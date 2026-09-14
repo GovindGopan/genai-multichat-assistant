@@ -6,9 +6,10 @@ from google import genai
 from database.database import (
     create_tables,
     create_conversation,
+    get_conversations,
     save_message,
     get_messages,
-    get_latest_conversation
+    update_conversation_title
 )
 
 
@@ -28,35 +29,95 @@ create_tables()
 st.title("GenAI Chatbot")
 
 
-# Initialize conversation ID
+# --------------------------------------------------
+# SIDEBAR
+# --------------------------------------------------
+
+st.sidebar.title("Conversations")
+
+
+if st.sidebar.button("+ New Chat"):
+
+    new_conversation_id = create_conversation()
+
+    st.session_state.conversation_id = new_conversation_id
+
+    st.rerun()
+
+
+# Get all conversations
+conversations = get_conversations()
+
+
+# Create a conversation if none exists
+if not conversations:
+
+    new_conversation_id = create_conversation()
+
+    st.session_state.conversation_id = new_conversation_id
+
+    st.rerun()
+
+
+# Initialize selected conversation
 if "conversation_id" not in st.session_state:
 
-    latest_conversation = get_latest_conversation()
-
-    if latest_conversation is not None:
-        st.session_state["conversation_id"] = latest_conversation[0]
-    else:
-        st.session_state["conversation_id"] = create_conversation()
+    st.session_state.conversation_id = conversations[0][0]
 
 
-# Get messages from the current conversation
-conversation_id = st.session_state["conversation_id"]
+# Display conversations
+for conversation_id, title in conversations:
+
+    if st.sidebar.button(
+        title,
+        key=f"conversation_{conversation_id}"
+    ):
+
+        st.session_state.conversation_id = conversation_id
+
+        st.rerun()
+
+
+# --------------------------------------------------
+# CURRENT CONVERSATION
+# --------------------------------------------------
+
+conversation_id = st.session_state.conversation_id
+
 
 messages = get_messages(conversation_id)
 
 
-# Display previous messages
+# Display messages
 for role, content in messages:
 
     with st.chat_message(role):
         st.write(content)
 
 
-# Chat input
+# --------------------------------------------------
+# CHAT INPUT
+# --------------------------------------------------
+
 user_input = st.chat_input("Type your message...")
 
 
 if user_input:
+
+    # If this is the first message,
+    # use it as the conversation title
+    if len(messages) == 0:
+
+        title = user_input.strip()
+
+        if len(title) > 40:
+            title = title[:40] + "..."
+
+        update_conversation_title(
+            conversation_id,
+            title
+        )
+
 
     # Save user message
     save_message(
@@ -64,6 +125,7 @@ if user_input:
         "user",
         user_input
     )
+
 
     # Display user message
     with st.chat_message("user"):
@@ -86,7 +148,7 @@ if user_input:
         answer
     )
 
+
     # Display AI response
     with st.chat_message("assistant"):
         st.write(answer)
-

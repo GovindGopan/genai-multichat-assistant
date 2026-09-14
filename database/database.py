@@ -2,7 +2,7 @@ import sqlite3
 from pathlib import Path
 
 
-# Always use the database inside the project folder
+# Database location
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATABASE_NAME = BASE_DIR / "chatbot.db"
 
@@ -56,6 +56,42 @@ def create_conversation(title="New Conversation"):
     return conversation_id
 
 
+def update_conversation_title(conversation_id, title):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        UPDATE conversations
+        SET title = ?
+        WHERE id = ?
+        """,
+        (title, conversation_id)
+    )
+
+    connection.commit()
+    connection.close()
+
+
+def get_conversations():
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cursor.execute(
+        """
+        SELECT id, title
+        FROM conversations
+        ORDER BY id DESC
+        """
+    )
+
+    conversations = cursor.fetchall()
+
+    connection.close()
+
+    return conversations
+
+
 def save_message(conversation_id, role, content):
     connection = get_connection()
     cursor = connection.cursor()
@@ -91,23 +127,3 @@ def get_messages(conversation_id):
     connection.close()
 
     return messages
-
-
-def get_latest_conversation():
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    cursor.execute(
-        """
-        SELECT id, title
-        FROM conversations
-        ORDER BY id DESC
-        LIMIT 1
-        """
-    )
-
-    conversation = cursor.fetchone()
-
-    connection.close()
-
-    return conversation
