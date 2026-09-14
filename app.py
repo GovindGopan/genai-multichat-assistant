@@ -27,6 +27,10 @@ load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
 
+if not api_key:
+    st.error("GEMINI_API_KEY is not configured. Check your .env file.")
+    st.stop()
+
 client = genai.Client(api_key=api_key)
 
 
@@ -34,7 +38,14 @@ client = genai.Client(api_key=api_key)
 # DATABASE SETUP
 # --------------------------------------------------
 
-create_tables()
+try:
+    create_tables()
+
+except Exception as e:
+
+    st.error("Could not initialize the database.")
+    print("Database error:", e)
+    st.stop()
 
 
 # --------------------------------------------------
@@ -51,31 +62,54 @@ st.title("GenAI Chatbot")
 st.sidebar.title("Conversations")
 
 
-# New conversation button
+# New Chat
 if st.sidebar.button("+ New Chat"):
 
-    new_conversation_id = create_conversation()
+    try:
 
-    st.session_state.conversation_id = new_conversation_id
+        new_conversation_id = create_conversation()
 
-    st.rerun()
+        st.session_state.conversation_id = new_conversation_id
+
+        st.rerun()
+
+    except Exception as e:
+
+        st.sidebar.error("Could not create a new conversation.")
+        print("Create conversation error:", e)
 
 
 # Get conversations
-conversations = get_conversations()
+try:
+
+    conversations = get_conversations()
+
+except Exception as e:
+
+    st.error("Could not load conversations.")
+    print("Get conversations error:", e)
+    st.stop()
 
 
-# Create a conversation if none exist
+# Create initial conversation
 if not conversations:
 
-    new_conversation_id = create_conversation()
+    try:
 
-    st.session_state.conversation_id = new_conversation_id
+        new_conversation_id = create_conversation()
 
-    st.rerun()
+        st.session_state.conversation_id = new_conversation_id
+
+        st.rerun()
+
+    except Exception as e:
+
+        st.error("Could not create the first conversation.")
+        print("Create conversation error:", e)
+        st.stop()
 
 
-# Initialize current conversation
+# Initialize conversation
 if "conversation_id" not in st.session_state:
 
     st.session_state.conversation_id = conversations[0][0]
@@ -89,7 +123,6 @@ for conversation_id, title in conversations:
 
     col1, col2 = st.sidebar.columns([4, 1])
 
-    # Conversation button
     with col1:
 
         if st.button(
@@ -101,8 +134,6 @@ for conversation_id, title in conversations:
 
             st.rerun()
 
-
-    # Delete button
     with col2:
 
         if st.button(
@@ -110,30 +141,32 @@ for conversation_id, title in conversations:
             key=f"delete_{conversation_id}"
         ):
 
-            delete_conversation(conversation_id)
+            try:
 
-            # Check remaining conversations
-            remaining_conversations = get_conversations()
+                delete_conversation(conversation_id)
 
-            if remaining_conversations:
+                remaining_conversations = get_conversations()
 
-                # If deleted conversation was active,
-                # switch to another conversation.
-                if st.session_state.conversation_id == conversation_id:
+                if remaining_conversations:
+
+                    if st.session_state.conversation_id == conversation_id:
+
+                        st.session_state.conversation_id = (
+                            remaining_conversations[0][0]
+                        )
+
+                else:
 
                     st.session_state.conversation_id = (
-                        remaining_conversations[0][0]
+                        create_conversation()
                     )
 
-            else:
+                st.rerun()
 
-                # If there are no conversations left,
-                # create a new one.
-                st.session_state.conversation_id = (
-                    create_conversation()
-                )
+            except Exception as e:
 
-            st.rerun()
+                st.sidebar.error("Could not delete conversation.")
+                print("Delete conversation error:", e)
 
 
 # --------------------------------------------------
@@ -142,7 +175,16 @@ for conversation_id, title in conversations:
 
 conversation_id = st.session_state.conversation_id
 
-messages = get_messages(conversation_id)
+
+try:
+
+    messages = get_messages(conversation_id)
+
+except Exception as e:
+
+    st.error("Could not load conversation messages.")
+    print("Get messages error:", e)
+    st.stop()
 
 
 # --------------------------------------------------
@@ -166,7 +208,7 @@ user_input = st.chat_input("Type your message...")
 if user_input:
 
     # --------------------------------------------------
-    # BUILD SHORT-TERM CONVERSATION HISTORY
+    # BUILD SHORT-TERM MEMORY
     # --------------------------------------------------
 
     conversation_history = ""
@@ -185,14 +227,13 @@ if user_input:
                 f"Assistant: {content}\n"
             )
 
-
     conversation_history += (
         f"User: {user_input}\n"
     )
 
 
     # --------------------------------------------------
-    # CREATE CONVERSATION TITLE
+    # CONVERSATION TITLE
     # --------------------------------------------------
 
     if len(messages) == 0:
@@ -203,23 +244,38 @@ if user_input:
 
             title = title[:40] + "..."
 
-        update_conversation_title(
-            conversation_id,
-            title
-        )
+        try:
+
+            update_conversation_title(
+                conversation_id,
+                title
+            )
+
+        except Exception as e:
+
+            print("Update title error:", e)
 
 
     # --------------------------------------------------
     # SAVE USER MESSAGE
     # --------------------------------------------------
 
-    save_message(
-        conversation_id,
-        "user",
-        user_input
-    )
+    try:
+
+        save_message(
+            conversation_id,
+            "user",
+            user_input
+        )
+
+    except Exception as e:
+
+        st.error("Could not save your message.")
+        print("Save user message error:", e)
+        st.stop()
 
 
+    # Display user message
     with st.chat_message("user"):
 
         st.write(user_input)
@@ -240,7 +296,6 @@ if user_input:
         "i prefer"
     ]
 
-
     user_input_lower = user_input.lower()
 
 
@@ -248,20 +303,34 @@ if user_input:
 
         if keyword in user_input_lower:
 
-            add_memory(
-                f"User said: {user_input}"
-            )
+            try:
+
+                add_memory(
+                    f"User said: {user_input}"
+                )
+
+            except Exception as e:
+
+                print("Memory storage error:", e)
 
             break
 
 
     # --------------------------------------------------
-    # RETRIEVE RELEVANT MEMORIES
+    # RETRIEVE LONG-TERM MEMORY
     # --------------------------------------------------
 
-    relevant_memories = search_memories(
-        user_input
-    )
+    try:
+
+        relevant_memories = search_memories(
+            user_input
+        )
+
+    except Exception as e:
+
+        print("Memory retrieval error:", e)
+
+        relevant_memories = []
 
 
     # --------------------------------------------------
@@ -276,9 +345,13 @@ if user_input:
             relevant_memories
         )
 
+    else:
+
+        rag_context = "No relevant long-term memory found."
+
 
     # --------------------------------------------------
-    # CREATE GEMINI PROMPT
+    # GEMINI PROMPT
     # --------------------------------------------------
 
     prompt = f"""
@@ -287,11 +360,11 @@ You are a helpful personal AI assistant.
 Use the conversation history to understand the
 current conversation.
 
-Use the retrieved context only when it is relevant
-to the user's current question.
+Use retrieved long-term memory only when it is
+relevant to the user's question.
 
-Do not invent information that is not present
-in the conversation or retrieved context.
+If the information is not available in the
+conversation or retrieved memory, do not invent it.
 
 Conversation history:
 {conversation_history}
@@ -307,7 +380,7 @@ Respond naturally and helpfully.
 
 
     # --------------------------------------------------
-    # CALL GEMINI
+    # GEMINI API
     # --------------------------------------------------
 
     try:
@@ -319,26 +392,36 @@ Respond naturally and helpfully.
 
         answer = response.output_text
 
-
     except Exception as e:
 
         print("Gemini API error:", e)
 
         answer = (
-            "Sorry, I couldn't connect to the AI service."
+            "Sorry, I couldn't connect to the AI service. "
+            "Please try again."
         )
 
 
     # --------------------------------------------------
-    # SAVE AI RESPONSE
+    # SAVE ASSISTANT RESPONSE
     # --------------------------------------------------
 
-    save_message(
-        conversation_id,
-        "assistant",
-        answer
-    )
+    try:
 
+        save_message(
+            conversation_id,
+            "assistant",
+            answer
+        )
+
+    except Exception as e:
+
+        print("Save assistant message error:", e)
+
+
+    # --------------------------------------------------
+    # DISPLAY ASSISTANT RESPONSE
+    # --------------------------------------------------
 
     with st.chat_message("assistant"):
 

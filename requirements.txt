@@ -1,0 +1,8 @@
+streamlit
+python-dotenv
+google-genai
+sentence-transformers
+chromadb
+torch
+torchvision
+
