@@ -127,3 +127,30 @@ def get_messages(conversation_id):
     connection.close()
 
     return messages
+
+
+def delete_conversation(conversation_id):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    # Delete all messages belonging to the conversation
+    cursor.execute(
+        """
+        DELETE FROM messages
+        WHERE conversation_id = ?
+        """,
+        (conversation_id,)
+    )
+
+    # Delete the conversation
+    cursor.execute(
+        """
+        DELETE FROM conversations
+        WHERE id = ?
+        """,
+        (conversation_id,)
+    )
+
+    connection.commit()
+    connection.close()
+

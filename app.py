@@ -9,7 +9,8 @@ from database.database import (
     get_conversations,
     save_message,
     get_messages,
-    update_conversation_title
+    update_conversation_title,
+    delete_conversation
 )
 
 from memory.memory import (
@@ -50,6 +51,7 @@ st.title("GenAI Chatbot")
 st.sidebar.title("Conversations")
 
 
+# New conversation button
 if st.sidebar.button("+ New Chat"):
 
     new_conversation_id = create_conversation()
@@ -59,9 +61,11 @@ if st.sidebar.button("+ New Chat"):
     st.rerun()
 
 
+# Get conversations
 conversations = get_conversations()
 
 
+# Create a conversation if none exist
 if not conversations:
 
     new_conversation_id = create_conversation()
@@ -71,21 +75,65 @@ if not conversations:
     st.rerun()
 
 
+# Initialize current conversation
 if "conversation_id" not in st.session_state:
 
     st.session_state.conversation_id = conversations[0][0]
 
 
+# --------------------------------------------------
+# DISPLAY CONVERSATIONS
+# --------------------------------------------------
+
 for conversation_id, title in conversations:
 
-    if st.sidebar.button(
-        title,
-        key=f"conversation_{conversation_id}"
-    ):
+    col1, col2 = st.sidebar.columns([4, 1])
 
-        st.session_state.conversation_id = conversation_id
+    # Conversation button
+    with col1:
 
-        st.rerun()
+        if st.button(
+            title,
+            key=f"conversation_{conversation_id}"
+        ):
+
+            st.session_state.conversation_id = conversation_id
+
+            st.rerun()
+
+
+    # Delete button
+    with col2:
+
+        if st.button(
+            "🗑",
+            key=f"delete_{conversation_id}"
+        ):
+
+            delete_conversation(conversation_id)
+
+            # Check remaining conversations
+            remaining_conversations = get_conversations()
+
+            if remaining_conversations:
+
+                # If deleted conversation was active,
+                # switch to another conversation.
+                if st.session_state.conversation_id == conversation_id:
+
+                    st.session_state.conversation_id = (
+                        remaining_conversations[0][0]
+                    )
+
+            else:
+
+                # If there are no conversations left,
+                # create a new one.
+                st.session_state.conversation_id = (
+                    create_conversation()
+                )
+
+            st.rerun()
 
 
 # --------------------------------------------------
@@ -97,10 +145,14 @@ conversation_id = st.session_state.conversation_id
 messages = get_messages(conversation_id)
 
 
-# Display previous messages
+# --------------------------------------------------
+# DISPLAY MESSAGE HISTORY
+# --------------------------------------------------
+
 for role, content in messages:
 
     with st.chat_message(role):
+
         st.write(content)
 
 
@@ -123,18 +175,24 @@ if user_input:
 
         if role == "user":
 
-            conversation_history += f"User: {content}\n"
+            conversation_history += (
+                f"User: {content}\n"
+            )
 
         elif role == "assistant":
 
-            conversation_history += f"Assistant: {content}\n"
+            conversation_history += (
+                f"Assistant: {content}\n"
+            )
 
 
-    conversation_history += f"User: {user_input}\n"
+    conversation_history += (
+        f"User: {user_input}\n"
+    )
 
 
     # --------------------------------------------------
-    # CONVERSATION TITLE
+    # CREATE CONVERSATION TITLE
     # --------------------------------------------------
 
     if len(messages) == 0:
@@ -168,7 +226,7 @@ if user_input:
 
 
     # --------------------------------------------------
-    # STORE IMPORTANT LONG-TERM MEMORY
+    # LONG-TERM MEMORY
     # --------------------------------------------------
 
     memory_keywords = [
@@ -198,7 +256,7 @@ if user_input:
 
 
     # --------------------------------------------------
-    # RETRIEVE LONG-TERM MEMORIES
+    # RETRIEVE RELEVANT MEMORIES
     # --------------------------------------------------
 
     relevant_memories = search_memories(
