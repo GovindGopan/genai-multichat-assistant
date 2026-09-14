@@ -12,8 +12,17 @@ from database.database import (
     update_conversation_title
 )
 
+from memory.memory import (
+    add_memory,
+    search_memories
+)
 
-# Load environment variables
+
+# --------------------------------------------------
+# LOAD ENVIRONMENT VARIABLES
+# --------------------------------------------------
+
+
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
@@ -21,11 +30,17 @@ api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
 
-# Create database tables
+# --------------------------------------------------
+# DATABASE SETUP
+# --------------------------------------------------
+
 create_tables()
 
 
-# Streamlit page
+# --------------------------------------------------
+# STREAMLIT PAGE
+# --------------------------------------------------
+
 st.title("GenAI Chatbot")
 
 
@@ -49,7 +64,7 @@ if st.sidebar.button("+ New Chat"):
 conversations = get_conversations()
 
 
-# Create a conversation if none exists
+# Create first conversation if none exists
 if not conversations:
 
     new_conversation_id = create_conversation()
@@ -85,10 +100,11 @@ for conversation_id, title in conversations:
 conversation_id = st.session_state.conversation_id
 
 
+# Get messages for current conversation
 messages = get_messages(conversation_id)
 
 
-# Display messages
+# Display previous messages
 for role, content in messages:
 
     with st.chat_message(role):
@@ -104,13 +120,43 @@ user_input = st.chat_input("Type your message...")
 
 if user_input:
 
-    # If this is the first message,
-    # use it as the conversation title
+    # --------------------------------------------------
+    # BUILD SHORT-TERM CONVERSATION HISTORY
+    # --------------------------------------------------
+
+    conversation_history = ""
+
+    for role, content in messages:
+
+        if role == "user":
+
+            conversation_history += (
+                f"User: {content}\n"
+            )
+
+        elif role == "assistant":
+
+            conversation_history += (
+                f"Assistant: {content}\n"
+            )
+
+
+    # Add current question
+    conversation_history += (
+        f"User: {user_input}\n"
+    )
+
+
+    # --------------------------------------------------
+    # CONVERSATION TITLE
+    # --------------------------------------------------
+
     if len(messages) == 0:
 
         title = user_input.strip()
 
         if len(title) > 40:
+
             title = title[:40] + "..."
 
         update_conversation_title(
@@ -119,7 +165,10 @@ if user_input:
         )
 
 
-    # Save user message
+    # --------------------------------------------------
+    # SAVE USER MESSAGE
+    # --------------------------------------------------
+
     save_message(
         conversation_id,
         "user",
@@ -129,19 +178,114 @@ if user_input:
 
     # Display user message
     with st.chat_message("user"):
+
         st.write(user_input)
 
 
-    # Send message to Gemini
-    response = client.interactions.create(
-        model="gemini-3.6-flash",
-        input=user_input
+    # --------------------------------------------------
+    # LONG-TERM MEMORY
+    # --------------------------------------------------
+
+    memory_keywords = [
+        "my name is",
+        "i am learning",
+        "i'm learning",
+        "i like",
+        "i love",
+        "my goal is",
+        "i want to learn",
+        "i prefer"
+    ]
+
+
+    user_input_lower = user_input.lower()
+
+
+    for keyword in memory_keywords:
+
+        if keyword in user_input_lower:
+
+            add_memory(
+                f"User said: {user_input}"
+            )
+
+            break
+
+
+    # --------------------------------------------------
+    # RETRIEVE RELEVANT LONG-TERM MEMORIES
+    # --------------------------------------------------
+
+    relevant_memories = search_memories(
+        user_input
     )
 
-    answer = response.output_text
+
+    memory_context = ""
+
+    if relevant_memories:
+
+        memory_context = "\n".join(
+            relevant_memories
+        )
 
 
-    # Save AI response
+    # --------------------------------------------------
+    # CREATE GEMINI PROMPT
+    # --------------------------------------------------
+
+    prompt = f"""
+You are a helpful personal AI assistant.
+
+Use the conversation history to understand the
+current conversation.
+
+Use the long-term memories only when they are
+relevant to the user's current question.
+
+Do not invent information that is not present
+in the conversation or memories.
+
+Conversation history:
+{conversation_history}
+
+Long-term memories:
+{memory_context}
+
+User's latest message:
+{user_input}
+
+Respond naturally and helpfully.
+"""
+
+
+    # --------------------------------------------------
+    # CALL GEMINI
+    # --------------------------------------------------
+
+    try:
+
+        response = client.interactions.create(
+            model="gemini-3.6-flash",
+            input=prompt
+        )
+
+        answer = response.output_text
+
+
+    except Exception as e:
+
+        answer = (
+            "Sorry, I couldn't connect to the AI service."
+        )
+
+        print("Gemini API error:", e)
+
+
+    # --------------------------------------------------
+    # SAVE AI RESPONSE
+    # --------------------------------------------------
+
     save_message(
         conversation_id,
         "assistant",
@@ -151,4 +295,5 @@ if user_input:
 
     # Display AI response
     with st.chat_message("assistant"):
+
         st.write(answer)
