@@ -22,7 +22,6 @@ from memory.memory import (
 # LOAD ENVIRONMENT VARIABLES
 # --------------------------------------------------
 
-
 load_dotenv()
 
 api_key = os.getenv("GEMINI_API_KEY")
@@ -60,11 +59,9 @@ if st.sidebar.button("+ New Chat"):
     st.rerun()
 
 
-# Get all conversations
 conversations = get_conversations()
 
 
-# Create first conversation if none exists
 if not conversations:
 
     new_conversation_id = create_conversation()
@@ -74,13 +71,11 @@ if not conversations:
     st.rerun()
 
 
-# Initialize selected conversation
 if "conversation_id" not in st.session_state:
 
     st.session_state.conversation_id = conversations[0][0]
 
 
-# Display conversations
 for conversation_id, title in conversations:
 
     if st.sidebar.button(
@@ -99,8 +94,6 @@ for conversation_id, title in conversations:
 
 conversation_id = st.session_state.conversation_id
 
-
-# Get messages for current conversation
 messages = get_messages(conversation_id)
 
 
@@ -130,21 +123,14 @@ if user_input:
 
         if role == "user":
 
-            conversation_history += (
-                f"User: {content}\n"
-            )
+            conversation_history += f"User: {content}\n"
 
         elif role == "assistant":
 
-            conversation_history += (
-                f"Assistant: {content}\n"
-            )
+            conversation_history += f"Assistant: {content}\n"
 
 
-    # Add current question
-    conversation_history += (
-        f"User: {user_input}\n"
-    )
+    conversation_history += f"User: {user_input}\n"
 
 
     # --------------------------------------------------
@@ -176,14 +162,13 @@ if user_input:
     )
 
 
-    # Display user message
     with st.chat_message("user"):
 
         st.write(user_input)
 
 
     # --------------------------------------------------
-    # LONG-TERM MEMORY
+    # STORE IMPORTANT LONG-TERM MEMORY
     # --------------------------------------------------
 
     memory_keywords = [
@@ -213,7 +198,7 @@ if user_input:
 
 
     # --------------------------------------------------
-    # RETRIEVE RELEVANT LONG-TERM MEMORIES
+    # RETRIEVE LONG-TERM MEMORIES
     # --------------------------------------------------
 
     relevant_memories = search_memories(
@@ -221,11 +206,15 @@ if user_input:
     )
 
 
-    memory_context = ""
+    # --------------------------------------------------
+    # BUILD RAG CONTEXT
+    # --------------------------------------------------
+
+    rag_context = ""
 
     if relevant_memories:
 
-        memory_context = "\n".join(
+        rag_context = "\n".join(
             relevant_memories
         )
 
@@ -240,17 +229,17 @@ You are a helpful personal AI assistant.
 Use the conversation history to understand the
 current conversation.
 
-Use the long-term memories only when they are
-relevant to the user's current question.
+Use the retrieved context only when it is relevant
+to the user's current question.
 
 Do not invent information that is not present
-in the conversation or memories.
+in the conversation or retrieved context.
 
 Conversation history:
 {conversation_history}
 
-Long-term memories:
-{memory_context}
+Retrieved context from long-term memory:
+{rag_context}
 
 User's latest message:
 {user_input}
@@ -275,11 +264,11 @@ Respond naturally and helpfully.
 
     except Exception as e:
 
+        print("Gemini API error:", e)
+
         answer = (
             "Sorry, I couldn't connect to the AI service."
         )
-
-        print("Gemini API error:", e)
 
 
     # --------------------------------------------------
@@ -293,7 +282,7 @@ Respond naturally and helpfully.
     )
 
 
-    # Display AI response
     with st.chat_message("assistant"):
 
         st.write(answer)
+
